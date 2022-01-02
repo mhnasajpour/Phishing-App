@@ -1,9 +1,8 @@
-# Hello Hackers 2021 phishing script
+# Hello Hackers 2021 phishing app
 
 This script was designed and written for Hello Hackers 2021
 
-**For educational purposes only**\
-We have no responsibility regarding the misuse of the script for and by any individual
+**For educational purposes only**
 
 **with running this code, you can pulling out this items**
 
