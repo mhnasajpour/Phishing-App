@@ -4,7 +4,7 @@ This script was designed and written for Hello Hackers 2021
 
 **For educational purposes only**
 
-**with running this code, you can pulling out this items**
+**With running this code, you can pulling out this items**
 
 1- First and last name\
 2- Student id\
@@ -19,7 +19,7 @@ This script was designed and written for Hello Hackers 2021
 8- List of all Firefox and Chrome bookmarks\
 9- List of all Firefox and Chrome histories
 
-10- list of installed apps
+10- List of installed apps
 
 And the last send these items to your email\
 Hope you enjoy :)
