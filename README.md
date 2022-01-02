@@ -4,14 +4,14 @@ This script was designed and written for Hello Hackers 2021
 
 **For educational purposes only**
 
-**With running this code, you can pulling out this items**
+**By running this code, you can pull out these items**
 
 1- First and last name\
 2- Student id\
-3- Laptop brand (manufacturer and systemFamily)
+3- Laptop brand (manufacturer and system family)
 
 4- Battery charge percentage\
-5- Is laptop plugged in\
+5- Is the laptop plugged in\
 6- Battery left time
 
 7- List of all connected WiFi with their password until now
