@@ -1,0 +1,8 @@
+browser-history==0.3.2
+cffi==1.15.0
+cryptography==35.0.0
+psutil==5.8.0
+pycparser==2.21
+pycryptodome==3.14.1
+pywin32==303
+WMI==1.5.1
